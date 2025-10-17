@@ -4,151 +4,176 @@
 [![PlatformIO Registry](https://badges.registry.platformio.org/packages/mathieucarbou/library/MycilaPZEM.svg)](https://registry.platformio.org/libraries/mathieucarbou/MycilaPZEM)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](code_of_conduct.md)
+[![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](CODE_OF_CONDUCT.md)
 
 [![Build](https://github.com/mathieucarbou/MycilaPZEM/actions/workflows/ci.yml/badge.svg)](https://github.com/mathieucarbou/MycilaPZEM/actions/workflows/ci.yml)
 [![GitHub latest commit](https://badgen.net/github/last-commit/mathieucarbou/MycilaPZEM)](https://GitHub.com/mathieucarbou/MycilaPZEM/commit/)
 [![Gitpod Ready-to-Code](https://img.shields.io/badge/Gitpod-Ready--to--Code-blue?logo=gitpod)](https://gitpod.io/#https://github.com/mathieucarbou/MycilaPZEM)
 
-Arduino / ESP32 library for the PZEM-004T v3 and v4 Power and Energy monitor
+Arduino / ESP32 library for the PZEM-004T power and energy monitor (v3 and v4).
 
-Please read this good article first:
+Note on “v4”: Some sellers now market a PZEM-004T “v4”. In practice, this is the same device as v3 with updated electronic components; the protocol and behavior are identical. This library fully supports both v3 and v4.
 
-- [PZEM-004T V3](https://innovatorsguru.com/pzem-004t-v3/)
+## ✨ Highlights
 
-And also have a look at this inspiring and well documented GitHub project:
+- ESP32-focused, robust, and fast
+- Blocking and non-blocking (async) modes
+- Multiple PZEM-004T v3/v4 devices on the same RX/TX port
+- Auto-detect devices and manage device addresses
+- Live energy reset in both modes
+- Configurable core, stack size, task priority, and read timeout
+- Callback mechanism for data change events
 
-- [mandulaj/PZEM-004T-v30](https://github.com/mandulaj/PZEM-004T-v30)
+## 🧭 Table of contents
 
-This project is an adaptation of the project above, focusing only on ESP32 and add support for async reading and async energy reset.
+- [🧰 About the hardware and compatibility](#about-the-hardware-and-compatibility)
+- [📦 Installation](#installation)
+- [🚀 Quick start](#quick-start)
+- [🧠 API overview (metrics and helpers)](#api-overview-metrics-and-helpers)
+- [🔌 Wiring](#wiring)
+- [🔗 Using multiple devices on one UART](#using-multiple-devices-on-one-uart)
+- [🔔 Callbacks and async mode](#callbacks-and-async-mode)
+  - [🧪 Callback example](#callback-example)
+- [♻️ Energy reset](#energy-reset)
+- [🏷️ Read and set address](#read-and-set-address)
+- [🎯 Start a PZEM with a specific address](#start-a-pzem-with-a-specific-address)
+- [🧾 JSON support (optional)](#json-support-optional)
+- [📈 Performance notes](#performance-notes)
+- [🛠️ Troubleshooting](#troubleshooting)
+- [📚 Reference material](#reference-material)
+- [📁 Examples](#examples)
+- [📜 License and conduct](#license-and-conduct)
 
-- **Support multiple PZEM-004T v3 and v4 devices on the same RX/TX port**
-- Support reading and setting addresses of PZEM devices
-- Blocking and non-blocking mode
-- Core, stack size, priority and read timeout can be configured
-- Automatically detect / search for PZEM devices
-- Energy reset live at runtime, in both async and normal mode
-- Focus on speed and reactivity with a callback mechanism
-- Available metrics:
+## 🧰 About the hardware and compatibility
 
-```c++
-          /**
-           * @brief Frequency in hertz (Hz).
-           * @note JSY1031, JSY-MK-163, JSY-MK-193, JSY-MK-194, JSY-MK-227, JSY-MK-229, JSY-MK-333
-           */
-          float frequency = NAN; // Hz
+- Supported modules: PZEM-004T v3.0 and v4.0 (same protocol/registers)
+- Supported MCUs: ESP32 (Library targets ESP32 specifically)
+- UART levels: Most ESP32 UART pins are 3.3V. PZEM-004T v3 typically works with 3.3V UART signals, but a level shifter is recommended for strict compatibility. Power the PZEM as specified by the vendor.
 
-          /**
-           * @brief Voltage in volts (V).
-           */
-          float voltage = NAN;
+If your unit is labeled or sold as “v4”, treat it as a v3 for wiring, protocol, and features. No special configuration is required.
 
-          /**
-           * @brief Current in amperes (A).
-           */
-          float current = NAN;
+## 📦 Installation
 
-          /**
-           * @brief Active power in watts (W).
-           */
-          float activePower = NAN;
+PlatformIO (recommended)
 
-          /**
-           * @brief Power factor
-           */
-          float powerFactor = NAN;
+- Add the dependency in your `platformio.ini`:
+  - `lib_deps = mathieucarbou/MycilaPZEM`
 
-          /**
-           * @brief Apparent power in volt-amperes (VA).
-           */
-          float apparentPower = NAN;
+Arduino IDE
 
-          /**
-           * @brief Reactive power in volt-amperes reactive (VAr).
-           */
-          float reactivePower = NAN;
+- Install manually by copying this repository into your `libraries` folder, or use the ZIP library install feature.
 
-          /**
-           * @brief Active energy in watt-hours (Wh).
-           */
-          uint32_t activeEnergy = 0;
+Optional JSON support
 
-          /**
-           * @brief Compute the total harmonic distortion percentage of current (THDi).
-           * This assumes THDu = 0 (perfect voltage sin wave).
-           * See: https://fr.electrical-installation.org/frwiki/Indicateur_de_distorsion_harmonique_:_facteur_de_puissance
-           * @param phi The phase shift angle in degrees (°) (0 for resistive load)
-           * @return The total harmonic distortion of current (THDi) as a percentage (%)
-           */
-          float thdi(float phi = 0) const;
+- Define `-D MYCILA_JSON_SUPPORT` in your build flags and add ArduinoJson to your project.
 
-          /**
-           * @brief Compute the resistance of the load in ohms (R = P / I^2).
-           */
-          float resistance() const;
+## 🚀 Quick start
 
-          /**
-           * @brief Compute the dimmed voltage (V = P / I).
-           * @note The dimmed voltage is the voltage that would be measured at the output of a TRIAC, SSR or voltage regulator device.
-           */
-          float dimmedVoltage() const;
-
-          /**
-           * @brief Compute the nominal power of the load in watts (P = V^2 / R).
-           * @note The voltage is the nominal voltage measured by the device and R is the measured resistance of the load, which can be regulated by a TRIAC, SSR or voltage regulator.
-           */
-          float nominalPower() const;
-```
-
-## Usage
-
-Have a look at all the examples in the [examples](examples) folder.
-
-There is a getter for each metric.
-
-### Blocking mode
+Recommended usage: non-blocking (async) with a callback
 
 ```c++
 Mycila::PZEM pzem;
 
 void setup() {
-  pzem.begin(Serial1, 14, 27); // auto-detect
-  pzem.begin(Serial1, 14, 27, 0x02); // specific address
-  pzem.setCallback([](const Mycila::PZEM::EventType eventType, const Mycila::PZEM::Data& data) {
-    // access the data
-    // data.voltage;
-    // data.activePower;
-    // ...
+  pzem.begin(Serial1, 14, 27, MYCILA_PZEM_DEFAULT_ADDRESS, true); // async
+  // React to fresh values as soon as they are read
+  pzem.setCallback([](const Mycila::PZEM::EventType evt, const Mycila::PZEM::Data &data){
+    if (evt == Mycila::PZEM::EventType::EVT_READ) {
+      // Example: print a few metrics
+      Serial.printf("V=%.2fV I=%.3fA P=%.1fW PF=%.2f\n", data.voltage, data.current, data.activePower, data.powerFactor);
+    }
   });
 }
 
 void loop() {
-  if (pzem.read()) {
-    // ...
-  }
-  delay(1000);
+  // no need to call read() in async mode
 }
 ```
 
-### Non-Blocking mode (async)
+## 🧠 API overview (metrics and helpers)
+
+The `Data` structure exposed by this library contains the following metrics and helpers:
 
 ```c++
-Mycila::PZEM pzem;
+/** Frequency in hertz (Hz). */
+float frequency = NAN; // Hz
 
-void setup() {
-  pzem.begin(Serial1, 14, 27, MYCILA_PZEM_DEFAULT_ADDRESS, true);
-}
+/** Voltage in volts (V). */
+float voltage = NAN;
+
+/** Current in amperes (A). */
+float current = NAN;
+
+/** Active power in watts (W). */
+float activePower = NAN;
+
+/** Power factor. */
+float powerFactor = NAN;
+
+/** Apparent power in volt-amperes (VA). */
+float apparentPower = NAN;
+
+/** Reactive power in volt-amperes reactive (VAr). */
+float reactivePower = NAN;
+
+/** Active energy in watt-hours (Wh). */
+uint32_t activeEnergy = 0;
+
+/** Compute THDi (assumes THDu = 0). */
+float thdi(float phi = 0) const;
+
+/** Compute load resistance (ohms). */
+float resistance() const;
+
+/** Compute dimmed voltage (V = P / I). */
+float dimmedVoltage() const;
+
+/** Compute nominal power (P = V^2 / R). */
+float nominalPower() const;
 ```
 
-Calling read() is not necessary.
+## 🔌 Wiring
 
-### Energy reset
+Typical ESP32 ↔ PZEM-004T wiring:
+
+- ESP32 GND ↔ PZEM GND
+- ESP32 RX (e.g., GPIO 14) ↔ PZEM TX
+- ESP32 TX (e.g., GPIO 27) ↔ PZEM RX
+- PZEM VCC: power as specified by your board (commonly 5V). Do not power from 3.3V unless your module allows it.
+- Current transformer (CT) clamp: place around the live wire only, with orientation arrow pointing toward the load.
+
+Notes:
+
+- UART levels: While many PZEM-004T v3/v4 modules accept 3.3V UART, using a level shifter between ESP32 (3.3V) and PZEM (5V side) is recommended for robustness.
+- Use a dedicated, stable power supply for the PZEM. Brown-outs can cause read errors or address loss.
+- On ESP32, `Serial1` default pins vary by board. Always pass explicit RX/TX pins in `begin()`.
+
+Example pin mapping used in examples: RX=14, TX=27
+
+## 🔗 Using multiple devices on one UART
+
+This library supports multiple PZEM-004T devices on the same RX/TX port using PZEM addresses.
+
+Basic steps:
+
+1. Connect the first PZEM-004T and set its address (use `examples/SetAddress/SetAddress.ino`).
+2. Disconnect it, connect the second one, and set a different address.
+3. Connect both devices to the same RX/TX port; read each by its address.
+
+## 🔔 Callbacks and async mode
+
+- `PZEM::Callback` is invoked when new data is read and a metric changed.
+- Use it to react instantly and avoid polling delays.
+
+See `examples/Callback` and `examples/CallbackAsync`.
+
+## ♻️ Energy reset
 
 ```c++
 pzem.resetEnergy();
 ```
 
-### Read and set address
+## 🏷️ Read and set address
 
 ```c++
 pzem.readDeviceAddress();
@@ -157,46 +182,36 @@ pzem.readDeviceAddress(true); // will read the address and use it as the new add
 pzem.setDeviceAddress(0x42);
 ```
 
-### Start a PZEM with a specific address
+## 🎯 Start a PZEM with a specific address
 
 ```c++
 pzem.begin(Serial1, 14, 27, address);
 ```
 
-### Json support
+## 🧾 JSON support (optional)
 
-Json support is optional.
-If you need it, please add this compilation flag to activate it: `-D MYCILA_JSON_SUPPORT` and do not forget to include the ArduinoJson library:
+JSON is optional; the recommended way is async + callbacks. If you still need JSON serialization, enable:
+`-D MYCILA_JSON_SUPPORT` and include ArduinoJson:
 
 ```c++
 #include <ArduinoJson.h>
 ```
 
-### Multiple PZEM devices on the same RX/TX port
+### 🧪 Callback example
 
-1. Connect the first PZEM-004T to the RX/TX port of the ESP32
-2. Restart and set the address of the first PZEM-004T (you can use the `SetAddress.ino` file)
-3. Disconnect the first PZEM-004T and connect the second one instead
-4. Restart and set the address of the second PZEM-004T v3
-5. Connect both PZEM-004T to the RX/TX port of the ESP32
-6. Restart and use both with their own address
-
-### Callbacks
-
-- `PZEM::Callback`: called when the PZEM has read the data and when a change for any of the metric is detected.
-  This is useful to be notified exactly when required.
-  You must check the event type
-
-**Callback Example**
-
-Reading a load for 2 second after it is turned on:
+Reading a load for ~2 seconds after it is turned on:
 
 ```c++
-  pzem.setCallback([](const Mycila::EventType eventType) {
+  static Mycila::PZEM::Data prevData;
+  pzem.setCallback([](const Mycila::PZEM::EventType eventType, const Mycila::PZEM::Data& data) {
     int64_t now = esp_timer_get_time();
     switch (eventType) {
-      case Mycila::EventType::EVT_READ:
+      case Mycila::PZEM::EventType::EVT_READ:
         Serial.printf(" - %" PRId64 " EVT_READ\n", now);
+        if (data != prevData) {
+          Serial.printf(" - %" PRIu32 " EVT_CHANGE: %f V, %f A, %f W\n", millis(), data.voltage, data.current, data.activePower);
+          prevData = data;
+        }
         break;
       default:
         Serial.printf(" - %" PRId64 " ERR\n", now);
@@ -274,7 +289,7 @@ Reading a load for 2 second after it is turned on:
  - 3908 EVT_CHANGE: 236.600006 V, 0.000000 A, 0.000000 W
 ```
 
-## Performance tests
+## 📈 Performance notes
 
 Here are below some test results for the PZEM for 50 consecutive reads on a nominal load of about 650W, controlled with a random SSR relay (0-100%).
 
@@ -328,10 +343,59 @@ The numbers might change a little but the order of magnitude should stay the sam
 - It takes **more than 2.5 seconds** for the PZEM to report a load value which is stable and according to what we expect.
   This duration contains the duration for the load to reach its nominal power, plus the duration it takes for the PZEM to stabilize its measurements.
 
-Te PZEM might use a sort of moving average over a window of about 2 seconds with updates every 1 second.
+The PZEM likely applies a moving-average-like window of ~2 seconds with updates every 1 second.
 
-## Reference material
+## 🛠️ Troubleshooting
+
+No data / timeouts
+
+- Verify RX/TX cross-over (ESP32 RX ↔ PZEM TX and ESP32 TX ↔ PZEM RX)
+- Confirm ground is shared (GND ↔ GND)
+- Ensure correct pins given to `begin(Serial1, rxPin, txPin, ...)`
+- Try a slower loop and avoid frequent re-open/close of Serial
+
+CRC errors / noise
+
+- Shorten UART wires, twist RX/TX with GND where possible
+- Add a common ground reference; avoid star grounds with noisy loads
+- Provide stable power to PZEM; avoid powering from weak USB ports
+
+Address issues
+
+- New/unknown device? Use address `MYCILA_PZEM_ADDRESS_GENERAL (0xF8)` or run `search()`
+- Use `examples/SetAddress` to set unique addresses before multi-drop wiring
+- Read back with `readDeviceAddress(true)` to confirm
+
+Multiple devices on one UART
+
+- Assign unique addresses first
+- If you share one HardwareSerial across instances, call `setSharedSerial(true)` on each
+- Poll devices in a loop or use async with callbacks for responsiveness
+
+CT wiring pitfalls
+
+- Clamp only the live conductor, not both L and N together
+- Observe the arrow direction; reverse if negative readings appear
+- Ensure the clamp is fully closed and seated
+
+## 📚 Reference material
 
 - [PZEM-004T-V3.0-Datasheet-User-Manual.pdf](https://mathieu.carbou.me/MycilaPZEM/PZEM-004T-V3.0-Datasheet-User-Manual.pdf)
 - [PZEM-004T V3](https://innovatorsguru.com/pzem-004t-v3/)
 - [mandulaj/PZEM-004T-v30](https://github.com/mandulaj/PZEM-004T-v30)
+
+## 📁 Examples
+
+Browse the `examples/` folder for ready-to-run sketches:
+
+- `Read` and `ReadAsync`: single-device blocking vs async
+- `ReadMultiAsync`: multiple devices on one UART
+- `Callback` and `CallbackAsync`: event-driven usage
+- `SetAddress`: assign a specific PZEM address
+- `EnergyReset`: reset accumulated energy
+- `PerfTest1` and `PerfTest2`: performance measurements
+
+## 📜 License and conduct
+
+- License: MIT
+- Contributor Covenant: see `CODE_OF_CONDUCT.md`
