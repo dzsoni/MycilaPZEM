@@ -14,7 +14,7 @@ Arduino / ESP32 library for the PZEM-004T power and energy monitor (v3 and v4).
 
 Note on “v4”: Some sellers now market a PZEM-004T “v4”. In practice, this is the same device as v3 with updated electronic components; the protocol and behavior are identical. This library fully supports both v3 and v4.
 
-## ✨ Highlights
+## Highlights
 
 - ESP32-focused, robust, and fast
 - Blocking and non-blocking (async) modes
@@ -24,27 +24,27 @@ Note on “v4”: Some sellers now market a PZEM-004T “v4”. In practice, thi
 - Configurable core, stack size, task priority, and read timeout
 - Callback mechanism for data change events
 
-## 🧭 Table of contents
+## Table of contents
 
-- [🧰 About the hardware and compatibility](#about-the-hardware-and-compatibility)
-- [📦 Installation](#installation)
-- [🚀 Quick start](#quick-start)
-- [🧠 API overview (metrics and helpers)](#api-overview-metrics-and-helpers)
-- [🔌 Wiring](#wiring)
-- [🔗 Using multiple devices on one UART](#using-multiple-devices-on-one-uart)
-- [🔔 Callbacks and async mode](#callbacks-and-async-mode)
-  - [🧪 Callback example](#callback-example)
-- [♻️ Energy reset](#energy-reset)
-- [🏷️ Read and set address](#read-and-set-address)
-- [🎯 Start a PZEM with a specific address](#start-a-pzem-with-a-specific-address)
-- [🧾 JSON support (optional)](#json-support-optional)
-- [📈 Performance notes](#performance-notes)
-- [🛠️ Troubleshooting](#troubleshooting)
-- [📚 Reference material](#reference-material)
-- [📁 Examples](#examples)
-- [📜 License and conduct](#license-and-conduct)
+- [About the hardware and compatibility](#about-the-hardware-and-compatibility)
+- [Installation](#installation)
+- [Quick start](#quick-start)
+- [API overview (metrics and helpers)](#api-overview-metrics-and-helpers)
+- [Wiring](#wiring)
+- [Using multiple devices on one UART](#using-multiple-devices-on-one-uart)
+- [Callbacks and async mode](#callbacks-and-async-mode)
+  - [Callback example](#callback-example)
+- [Energy reset](#energy-reset)
+- [Read and set address](#read-and-set-address)
+- [Start a PZEM with a specific address](#start-a-pzem-with-a-specific-address)
+- [JSON support (optional)](#json-support-optional)
+- [Performance notes](#performance-notes)
+- [Troubleshooting](#troubleshooting)
+- [Reference material](#reference-material)
+- [Examples](#examples)
+- [License and conduct](#license-and-conduct)
 
-## 🧰 About the hardware and compatibility
+## About the hardware and compatibility
 
 - Supported modules: PZEM-004T v3.0 and v4.0 (same protocol/registers)
 - Supported MCUs: ESP32 (Library targets ESP32 specifically)
@@ -52,7 +52,7 @@ Note on “v4”: Some sellers now market a PZEM-004T “v4”. In practice, thi
 
 If your unit is labeled or sold as “v4”, treat it as a v3 for wiring, protocol, and features. No special configuration is required.
 
-## 📦 Installation
+## Installation
 
 PlatformIO (recommended)
 
@@ -67,7 +67,7 @@ Optional JSON support
 
 - Define `-D MYCILA_JSON_SUPPORT` in your build flags and add ArduinoJson to your project.
 
-## 🚀 Quick start
+## Quick start
 
 Recommended usage: non-blocking (async) with a callback
 
@@ -90,7 +90,7 @@ void loop() {
 }
 ```
 
-## 🧠 API overview (metrics and helpers)
+## API overview (metrics and helpers)
 
 The `Data` structure exposed by this library contains the following metrics and helpers:
 
@@ -132,7 +132,7 @@ float dimmedVoltage() const;
 float nominalPower() const;
 ```
 
-## 🔌 Wiring
+## Wiring
 
 Typical ESP32 ↔ PZEM-004T wiring:
 
@@ -150,7 +150,7 @@ Notes:
 
 Example pin mapping used in examples: RX=14, TX=27
 
-## 🔗 Using multiple devices on one UART
+## Using multiple devices on one UART
 
 This library supports multiple PZEM-004T devices on the same RX/TX port using PZEM addresses.
 
@@ -160,20 +160,20 @@ Basic steps:
 2. Disconnect it, connect the second one, and set a different address.
 3. Connect both devices to the same RX/TX port; read each by its address.
 
-## 🔔 Callbacks and async mode
+## Callbacks and async mode
 
 - `PZEM::Callback` is invoked when new data is read and a metric changed.
 - Use it to react instantly and avoid polling delays.
 
 See `examples/Callback` and `examples/CallbackAsync`.
 
-## ♻️ Energy reset
+## Energy reset
 
 ```c++
 pzem.resetEnergy();
 ```
 
-## 🏷️ Read and set address
+## Read and set address
 
 ```c++
 pzem.readDeviceAddress();
@@ -182,13 +182,13 @@ pzem.readDeviceAddress(true); // will read the address and use it as the new add
 pzem.setDeviceAddress(0x42);
 ```
 
-## 🎯 Start a PZEM with a specific address
+## Start a PZEM with a specific address
 
 ```c++
 pzem.begin(Serial1, 14, 27, address);
 ```
 
-## 🧾 JSON support (optional)
+## JSON support (optional)
 
 JSON is optional; the recommended way is async + callbacks. If you still need JSON serialization, enable:
 `-D MYCILA_JSON_SUPPORT` and include ArduinoJson:
@@ -197,7 +197,7 @@ JSON is optional; the recommended way is async + callbacks. If you still need JS
 #include <ArduinoJson.h>
 ```
 
-### 🧪 Callback example
+### Callback example
 
 Reading a load for ~2 seconds after it is turned on:
 
@@ -220,7 +220,7 @@ Reading a load for ~2 seconds after it is turned on:
   });
 ```
 
-```
+```text
  - 227 EVT_CHANGE: 236.199997 V, 0.000000 A, 0.000000 W
  - 287749 EVT_READ
  - 347736 EVT_READ
@@ -289,13 +289,13 @@ Reading a load for ~2 seconds after it is turned on:
  - 3908 EVT_CHANGE: 236.600006 V, 0.000000 A, 0.000000 W
 ```
 
-## 📈 Performance notes
+## Performance notes
 
 Here are below some test results for the PZEM for 50 consecutive reads on a nominal load of about 650W, controlled with a random SSR relay (0-100%).
 
-**PerfTest1**
+### PerfTest1
 
-```
+```text
 pzem.read():
  - Errors: 0
  - Average read time: 120433 us
@@ -303,9 +303,9 @@ pzem.read():
  - Max read time: 126020 us
 ```
 
-**PerfTest2**
+### PerfTest2
 
-```
+```text
 pzem.read():
  - ROUND: 1
    * Load Detection time: 1207002 us (10 reads)
@@ -345,7 +345,7 @@ The numbers might change a little but the order of magnitude should stay the sam
 
 The PZEM likely applies a moving-average-like window of ~2 seconds with updates every 1 second.
 
-## 🛠️ Troubleshooting
+## Troubleshooting
 
 No data / timeouts
 
@@ -378,13 +378,13 @@ CT wiring pitfalls
 - Observe the arrow direction; reverse if negative readings appear
 - Ensure the clamp is fully closed and seated
 
-## 📚 Reference material
+## Reference material
 
 - [PZEM-004T-V3.0-Datasheet-User-Manual.pdf](https://mathieu.carbou.me/MycilaPZEM/PZEM-004T-V3.0-Datasheet-User-Manual.pdf)
 - [PZEM-004T V3](https://innovatorsguru.com/pzem-004t-v3/)
 - [mandulaj/PZEM-004T-v30](https://github.com/mandulaj/PZEM-004T-v30)
 
-## 📁 Examples
+## Examples
 
 Browse the `examples/` folder for ready-to-run sketches:
 
@@ -395,7 +395,7 @@ Browse the `examples/` folder for ready-to-run sketches:
 - `EnergyReset`: reset accumulated energy
 - `PerfTest1` and `PerfTest2`: performance measurements
 
-## 📜 License and conduct
+## License and conduct
 
 - License: MIT
 - Contributor Covenant: see `CODE_OF_CONDUCT.md`
