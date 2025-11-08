@@ -29,6 +29,9 @@
   #define MYCILA_PZEM_ASYNC_STACK_SIZE 3072 // 512 * 6
 #endif
 
+// Set the maximum number of PZEM instances to use in async mode
+// In async mode, a list of PZEM instances is maintained
+// and they are called one by one in a dedicated FreeRTOS task.
 #ifndef MYCILA_PZEM_ASYNC_MAX_INSTANCES
   #define MYCILA_PZEM_ASYNC_MAX_INSTANCES 4
 #endif
@@ -245,9 +248,11 @@ namespace Mycila {
     private:
       static std::mutex _mutex;
       static TaskHandle_t _taskHandle;
+#if MYCILA_PZEM_ASYNC_MAX_INSTANCES > 0
       static PZEM* _instances[MYCILA_PZEM_ASYNC_MAX_INSTANCES];
       static bool _add(PZEM* pzem);
       static void _remove(PZEM* pzem);
       static void _pzemTask(void* pvParameters);
+#endif
   };
 } // namespace Mycila

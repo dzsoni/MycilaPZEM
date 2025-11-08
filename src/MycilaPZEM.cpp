@@ -317,8 +317,11 @@ static const uint16_t crcTable[] PROGMEM = {
   0X8081,
   0X4040};
 
-TaskHandle_t Mycila::PZEM::_taskHandle = NULL;
+#if MYCILA_PZEM_ASYNC_MAX_INSTANCES > 0
 Mycila::PZEM* Mycila::PZEM::_instances[MYCILA_PZEM_ASYNC_MAX_INSTANCES];
+#endif
+
+TaskHandle_t Mycila::PZEM::_taskHandle = NULL;
 std::mutex Mycila::PZEM::_mutex;
 size_t Mycila::PZEM::_serialUsers = 0;
 
@@ -355,8 +358,12 @@ void Mycila::PZEM::begin(HardwareSerial& serial,
   _address = address;
 
   if (async) {
+#if MYCILA_PZEM_ASYNC_MAX_INSTANCES > 0
     LOGI(TAG, "Enable PZEM @ 0x%02X on Serial RX (PZEM TX Pin): %" PRId8 " and Serial TX (PZEM RX Pin): %" PRId8, address, rxPin, txPin);
     _enabled = _add(this);
+#else
+    _enabled = false;
+#endif
 
   } else {
     _enabled = true;
@@ -375,7 +382,9 @@ void Mycila::PZEM::end() {
   if (_enabled) {
     LOGI(TAG, "Disable PZEM @ 0x%02X", _address);
     _enabled = false;
+#if MYCILA_PZEM_ASYNC_MAX_INSTANCES > 0
     _remove(this);
+#endif
     std::lock_guard<std::mutex> lock(_mutex);
     if (_sharedSerial && _serialUsers)
       _serialUsers--;
@@ -730,6 +739,7 @@ uint16_t Mycila::PZEM::_crc16(const uint8_t* data, uint16_t len) {
 // static
 ///////////////////////////////////////////////////////////////////////////////
 
+#if MYCILA_PZEM_ASYNC_MAX_INSTANCES > 0
 bool Mycila::PZEM::_add(PZEM* pzem) {
   for (size_t i = 0; i < MYCILA_PZEM_ASYNC_MAX_INSTANCES; i++) {
     if (_instances[i] == nullptr) {
@@ -805,3 +815,4 @@ void Mycila::PZEM::_pzemTask(void* params) {
   _taskHandle = NULL;
   vTaskDelete(NULL);
 }
+#endif
