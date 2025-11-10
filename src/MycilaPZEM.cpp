@@ -59,7 +59,7 @@ extern Mycila::Logger logger;
 #endif
 
 // Pre computed CRC table
-static const uint16_t crcTable[] PROGMEM = {
+static constexpr uint16_t crcTable[] PROGMEM = {
   0X0000,
   0XC0C1,
   0XC181,
