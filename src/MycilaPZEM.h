@@ -7,6 +7,7 @@
 #include <HardwareSerial.h>
 
 #include <mutex>
+#include <utility>
 
 #ifdef MYCILA_JSON_SUPPORT
   #include <ArduinoJson.h>
@@ -208,7 +209,7 @@ namespace Mycila {
       // check if the device is connected to the , meaning if last read was successful
       bool isConnected() const { return _data.frequency > 0; }
 
-      void setCallback(Callback callback) { _callback = callback; }
+      void setCallback(Callback callback) { _callback = std::move(callback); }
 
     private:
       bool _enabled = false;
