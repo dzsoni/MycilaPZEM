@@ -211,6 +211,9 @@ namespace Mycila {
 
       void setCallback(Callback callback) { _callback = std::move(callback); }
 
+      // Thread-safe data getter for async mode
+      Data getData() const;
+
     private:
       bool _enabled = false;
       bool _sharedSerial = false;

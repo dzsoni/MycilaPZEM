@@ -577,12 +577,18 @@ size_t Mycila::PZEM::search(uint8_t* addresses, const size_t maxCount) {
 
 #ifdef MYCILA_JSON_SUPPORT
 void Mycila::PZEM::toJson(const JsonObject& root) const {
+  std::lock_guard<std::mutex> lock(_mutex);
   root["enabled"] = _enabled;
   root["address"] = _address;
   root["time"] = _time;
   _data.toJson(root);
 }
 #endif
+
+Mycila::PZEM::Data Mycila::PZEM::getData() const {
+  std::lock_guard<std::mutex> lock(_mutex);
+  return _data;
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // I/O

@@ -42,6 +42,7 @@ bool Mycila::PZEM::Data::operator==(const Mycila::PZEM::Data& other) const {
 }
 
 void Mycila::PZEM::Data::operator=(const Mycila::PZEM::Data& other) {
+  std::lock_guard<std::mutex> lock(PZEM::_mutex);
   frequency = other.frequency;
   voltage = other.voltage;
   current = other.current;
