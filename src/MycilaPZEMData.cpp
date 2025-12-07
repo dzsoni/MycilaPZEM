@@ -55,7 +55,6 @@ void Mycila::PZEM::Data::operator=(const Mycila::PZEM::Data& other) {
 
 #ifdef MYCILA_JSON_SUPPORT
 void Mycila::PZEM::Data::toJson(const JsonObject& root) const {
-  std::lock_guard<std::mutex> lock(PZEM::_mutex);
   if (!std::isnan(frequency))
     root["frequency"] = frequency;
   if (!std::isnan(voltage))
