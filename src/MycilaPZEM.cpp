@@ -322,7 +322,9 @@ Mycila::PZEM* Mycila::PZEM::_instances[MYCILA_PZEM_ASYNC_MAX_INSTANCES];
 #endif
 
 TaskHandle_t Mycila::PZEM::_taskHandle = NULL;
-std::mutex Mycila::PZEM::_mutex;
+std::recursive_mutex Mycila::PZEM::_mutex;
+std::vector<std::pair<HardwareSerial*, std::unique_ptr<std::recursive_mutex>>> Mycila::PZEM::_serialMutexes;
+std::mutex Mycila::PZEM::_serialRegistry;
 size_t Mycila::PZEM::_serialUsers = 0;
 
 void Mycila::PZEM::begin(HardwareSerial& serial,
@@ -385,7 +387,9 @@ void Mycila::PZEM::end() {
 #if MYCILA_PZEM_ASYNC_MAX_INSTANCES > 0
     _remove(this);
 #endif
-    std::lock_guard<std::mutex> lock(_mutex);
+    // Global mutex is still needed for Serial cleanup,
+    // because _serialUsers is a global variable
+    std::lock_guard<std::recursive_mutex> lock(_mutex);
     if (_sharedSerial && _serialUsers)
       _serialUsers--;
     if (!_sharedSerial || !_serialUsers) {
@@ -407,7 +411,8 @@ bool Mycila::PZEM::read(uint8_t address) {
   if (!_enabled)
     return false;
 
-  std::lock_guard<std::mutex> lock(_mutex);
+  // Per-serial blocking instead of the previous global mutex
+  std::lock_guard<std::recursive_mutex> lock(getSerialMutex(_serial));
 
   _send(address, PZEM_CMD_RIR, PZEM_REGISTER_VOLTAGE, PZEM_REGISTER_COUNT);
   ReadResult result = _timedRead(address, PZEM_RESPONSE_SIZE_READ_METRICS);
@@ -440,19 +445,24 @@ bool Mycila::PZEM::read(uint8_t address) {
 
   assert(result == ReadResult::READ_SUCCESS);
 
-  _data.voltage = (static_cast<uint32_t>(_buffer[3]) << 8 | static_cast<uint32_t>(_buffer[4])) * 0.1f;                                                                                            // Raw voltage in 0.1V
-  _data.current = (static_cast<uint32_t>(_buffer[5]) << 8 | static_cast<uint32_t>(_buffer[6] | static_cast<uint32_t>(_buffer[7]) << 24 | static_cast<uint32_t>(_buffer[8]) << 16)) * 0.001f;      // Raw current in 0.001A
-  _data.activePower = (static_cast<uint32_t>(_buffer[9]) << 8 | static_cast<uint32_t>(_buffer[10] | static_cast<uint32_t>(_buffer[11]) << 24 | static_cast<uint32_t>(_buffer[12]) << 16)) * 0.1f; // Raw power in 0.1W
-  _data.activeEnergy = (static_cast<uint32_t>(_buffer[13]) << 8 | static_cast<uint32_t>(_buffer[14] | static_cast<uint32_t>(_buffer[15]) << 24 | static_cast<uint32_t>(_buffer[16]) << 16));      // Raw Energy in 1Wh
-  _data.frequency = (static_cast<uint32_t>(_buffer[17]) << 8 | static_cast<uint32_t>(_buffer[18])) * 0.1f;                                                                                        // Raw Frequency in 0.1Hz
-  _data.powerFactor = (static_cast<uint32_t>(_buffer[19]) << 8 | static_cast<uint32_t>(_buffer[20])) * 0.01f;                                                                                     // Raw pf in 0.01
+  // Lock the data mutex for updating all values
+  {
+    std::lock_guard<std::mutex> dataLock(_data._dataMutex);
+    
+    _data.voltage = (static_cast<uint32_t>(_buffer[3]) << 8 | static_cast<uint32_t>(_buffer[4])) * 0.1f;                                                                                            // Raw voltage in 0.1V
+    _data.current = (static_cast<uint32_t>(_buffer[5]) << 8 | static_cast<uint32_t>(_buffer[6] | static_cast<uint32_t>(_buffer[7]) << 24 | static_cast<uint32_t>(_buffer[8]) << 16)) * 0.001f;      // Raw current in 0.001A
+    _data.activePower = (static_cast<uint32_t>(_buffer[9]) << 8 | static_cast<uint32_t>(_buffer[10] | static_cast<uint32_t>(_buffer[11]) << 24 | static_cast<uint32_t>(_buffer[12]) << 16)) * 0.1f; // Raw power in 0.1W
+    _data.activeEnergy = (static_cast<uint32_t>(_buffer[13]) << 8 | static_cast<uint32_t>(_buffer[14] | static_cast<uint32_t>(_buffer[15]) << 24 | static_cast<uint32_t>(_buffer[16]) << 16));      // Raw Energy in 1Wh
+    _data.frequency = (static_cast<uint32_t>(_buffer[17]) << 8 | static_cast<uint32_t>(_buffer[18])) * 0.1f;                                                                                        // Raw Frequency in 0.1Hz
+    _data.powerFactor = (static_cast<uint32_t>(_buffer[19]) << 8 | static_cast<uint32_t>(_buffer[20])) * 0.01f;                                                                                     // Raw pf in 0.01
 
-  // calculate remaining metrics
+    // calculate remaining metrics
 
-  // S = P / PF
-  _data.apparentPower = _data.powerFactor == 0 ? 0 : std::abs(_data.activePower / _data.powerFactor);
-  // Q = std::sqrt(S^2 - P^2)
-  _data.reactivePower = std::sqrt(_data.apparentPower * _data.apparentPower - _data.activePower * _data.activePower);
+    // S = P / PF
+    _data.apparentPower = _data.powerFactor == 0 ? 0 : std::abs(_data.activePower / _data.powerFactor);
+    // Q = std::sqrt(S^2 - P^2)
+    _data.reactivePower = std::sqrt(_data.apparentPower * _data.apparentPower - _data.activePower * _data.activePower);
+  }
 
   _time = millis();
 
@@ -473,7 +483,8 @@ bool Mycila::PZEM::resetEnergy(uint8_t address) {
 
   LOGD(TAG, "resetEnergy(0x%02X)", address);
 
-  std::lock_guard<std::mutex> lock(_mutex);
+  // Per-serial blocking
+  std::lock_guard<std::recursive_mutex> lock(getSerialMutex(_serial));
 
   _buffer[0] = address;
   _buffer[1] = PZEM_CMD_REST;
@@ -500,7 +511,8 @@ bool Mycila::PZEM::setDeviceAddress(const uint8_t address, const uint8_t newAddr
     return false;
   }
 
-  std::lock_guard<std::mutex> lock(_mutex);
+  // Per-serial blocking
+  std::lock_guard<std::recursive_mutex> lock(getSerialMutex(_serial));
 
   LOGD(TAG, "setDeviceAddress(0x%02X, 0x%02X)", address, newAddress);
 
@@ -529,7 +541,8 @@ uint8_t Mycila::PZEM::readDeviceAddress(bool update) {
   if (!_enabled)
     return false;
 
-  std::lock_guard<std::mutex> lock(_mutex);
+  // Per-serial blocking
+  std::lock_guard<std::recursive_mutex> lock(getSerialMutex(_serial));
 
   uint8_t address = MYCILA_PZEM_ADDRESS_UNKNOWN;
 
@@ -555,7 +568,8 @@ size_t Mycila::PZEM::search(uint8_t* addresses, const size_t maxCount) {
   if (maxCount == 0)
     return 0;
 
-  std::lock_guard<std::mutex> lock(_mutex);
+  // Per-serial blocking
+  std::lock_guard<std::recursive_mutex> lock(getSerialMutex(_serial));
 
   size_t count = 0;
 
@@ -577,7 +591,8 @@ size_t Mycila::PZEM::search(uint8_t* addresses, const size_t maxCount) {
 
 #ifdef MYCILA_JSON_SUPPORT
 void Mycila::PZEM::toJson(const JsonObject& root) const {
-  std::lock_guard<std::mutex> lock(_mutex);
+  // Per-serial blocking
+  std::lock_guard<std::recursive_mutex> lock(const_cast<PZEM*>(this)->getSerialMutex(_serial));
   root["enabled"] = _enabled;
   root["address"] = _address;
   root["time"] = _time;
@@ -586,7 +601,7 @@ void Mycila::PZEM::toJson(const JsonObject& root) const {
 #endif
 
 Mycila::PZEM::Data Mycila::PZEM::getData() const {
-  std::lock_guard<std::mutex> lock(_mutex);
+  std::lock_guard<std::mutex> lock(_data._dataMutex);
   return _data;
 }
 
@@ -698,8 +713,11 @@ size_t Mycila::PZEM::_drop() {
 }
 
 void Mycila::PZEM::_openSerial(const uint8_t rxPin, const uint8_t txPin) {
-  if (_sharedSerial && _serialUsers++)
-    return;
+  {
+    std::lock_guard<std::recursive_mutex> lock(_mutex);
+    if (_sharedSerial && _serialUsers++)
+      return;
+  }
   LOGD(TAG, "openSerial()");
   _serial->begin(PZEM_BAUD_RATE, SERIAL_8N1, rxPin, txPin);
   _serial->setTimeout(PZEM_TIMEOUT);
@@ -747,6 +765,7 @@ uint16_t Mycila::PZEM::_crc16(const uint8_t* data, uint16_t len) {
 
 #if MYCILA_PZEM_ASYNC_MAX_INSTANCES > 0
 bool Mycila::PZEM::_add(PZEM* pzem) {
+  std::lock_guard<std::recursive_mutex> lock(_mutex);
   for (size_t i = 0; i < MYCILA_PZEM_ASYNC_MAX_INSTANCES; i++) {
     if (_instances[i] == nullptr) {
       LOGD(TAG, "Adding instance at address 0x%02X to async task...", pzem->_address);
@@ -754,8 +773,11 @@ bool Mycila::PZEM::_add(PZEM* pzem) {
       if (_taskHandle == NULL) {
         pzem->_openSerial(pzem->_pinRX, pzem->_pinTX);
 
-        if (!pzem->_canRead(pzem->_address)) {
-          LOGW(TAG, "Unable to read at address 0x%02X. Please verify that the device is powered and that its address is correctly set.", pzem->_address);
+        {
+          std::lock_guard<std::recursive_mutex> serialLock(pzem->getSerialMutex(pzem->_serial));
+          if (!pzem->_canRead(pzem->_address)) {
+            LOGW(TAG, "Unable to read at address 0x%02X. Please verify that the device is powered and that its address is correctly set.", pzem->_address);
+          }
         }
 
         _instances[i] = pzem;
@@ -770,8 +792,11 @@ bool Mycila::PZEM::_add(PZEM* pzem) {
         }
 
       } else {
-        if (!pzem->_canRead(pzem->_address)) {
-          LOGW(TAG, "Unable to read at address 0x%02X. Please verify that the device is powered and that its address is correctly set.", pzem->_address);
+        {
+          std::lock_guard<std::recursive_mutex> serialLock(pzem->getSerialMutex(pzem->_serial));
+          if (!pzem->_canRead(pzem->_address)) {
+            LOGW(TAG, "Unable to read at address 0x%02X. Please verify that the device is powered and that its address is correctly set.", pzem->_address);
+          }
         }
         _instances[i] = pzem;
       }
@@ -783,6 +808,7 @@ bool Mycila::PZEM::_add(PZEM* pzem) {
 }
 
 void Mycila::PZEM::_remove(PZEM* pzem) {
+  std::lock_guard<std::recursive_mutex> lock(_mutex);
   // check for remaining tasks
   bool remaining = false;
   for (size_t i = 0; i < MYCILA_PZEM_ASYNC_MAX_INSTANCES; i++) {
@@ -807,18 +833,72 @@ void Mycila::PZEM::_remove(PZEM* pzem) {
 }
 
 void Mycila::PZEM::_pzemTask(void* params) {
+  size_t currentIndex = 0;
+  const uint32_t READ_INTERVAL_MS = 100;
+
   while (true) {
-    bool read = false;
-    for (size_t i = 0; i < MYCILA_PZEM_ASYNC_MAX_INSTANCES; i++) {
-      if (_instances[i] != nullptr) {
-        read |= _instances[i]->read();
-        yield();
+    bool readPerformed = false;
+    uint32_t startTime = millis();
+
+    {
+      std::lock_guard<std::recursive_mutex> lock(_mutex);
+      // Find next active instance
+      size_t checks = 0;
+      while (checks < MYCILA_PZEM_ASYNC_MAX_INSTANCES)
+      {
+        if (_instances[currentIndex] != nullptr)
+        {
+          // Found one! Read it while holding the lock.
+          _instances[currentIndex]->read();
+          readPerformed = true;
+
+          // Advance index for next iteration
+          currentIndex = (currentIndex + 1) % MYCILA_PZEM_ASYNC_MAX_INSTANCES;
+          break;
+        }
+        // Move to next slot
+        currentIndex = (currentIndex + 1) % MYCILA_PZEM_ASYNC_MAX_INSTANCES;
+        checks++;
       }
     }
-    if (!read)
-      delay(10);
+
+    if (readPerformed)
+    {
+      // Wait for the remainder of the interval
+      uint32_t elapsed = millis() - startTime;
+      if (elapsed < READ_INTERVAL_MS)
+      {
+        vTaskDelay((READ_INTERVAL_MS - elapsed) / portTICK_PERIOD_MS);
+      }else{
+        // If read took too long (e.g. timeout), yield briefly
+        vTaskDelay(10 / portTICK_PERIOD_MS);
+      }
+    }else{
+      // No active instances found, wait a bit
+      vTaskDelay(100 / portTICK_PERIOD_MS);
+    }
   }
   _taskHandle = NULL;
   vTaskDelete(NULL);
 }
 #endif
+
+// Serial-specific mutex getter implementation
+std::recursive_mutex& Mycila::PZEM::getSerialMutex(HardwareSerial* serial) {
+  std::lock_guard<std::mutex> lock(_serialRegistry);
+  
+  // Search in the vector
+  auto it = std::find_if(_serialMutexes.begin(), _serialMutexes.end(),
+    [serial](const std::pair<HardwareSerial*, std::unique_ptr<std::recursive_mutex>>& pair) {
+      return pair.first == serial;
+    });
+  
+  // If found, return the mutex reference
+  if (it != _serialMutexes.end()) {
+    return *(it->second);
+  }
+  
+  // If not found, add a new pair
+  _serialMutexes.emplace_back(serial, std::make_unique<std::recursive_mutex>());
+  return *(_serialMutexes.back().second);
+}

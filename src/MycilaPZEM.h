@@ -7,7 +7,9 @@
 #include <HardwareSerial.h>
 
 #include <mutex>
+#include <memory>
 #include <utility>
+#include <vector>
 
 #ifdef MYCILA_JSON_SUPPORT
   #include <ArduinoJson.h>
@@ -58,6 +60,35 @@ namespace Mycila {
 
       class Data {
         public:
+          // Default constructor
+          Data() = default;
+          
+          // Copy constructor
+          Data(const Data& other) {
+            std::lock_guard<std::mutex> lock(other._dataMutex);
+            frequency = other.frequency;
+            voltage = other.voltage;
+            current = other.current;
+            activePower = other.activePower;
+            powerFactor = other.powerFactor;
+            apparentPower = other.apparentPower;
+            reactivePower = other.reactivePower;
+            activeEnergy = other.activeEnergy;
+          }
+          
+          // Move constructor
+          Data(Data&& other) noexcept {
+            std::lock_guard<std::mutex> lock(other._dataMutex);
+            frequency = other.frequency;
+            voltage = other.voltage;
+            current = other.current;
+            activePower = other.activePower;
+            powerFactor = other.powerFactor;
+            apparentPower = other.apparentPower;
+            reactivePower = other.reactivePower;
+            activeEnergy = other.activeEnergy;
+          }
+
           /**
            * @brief Frequency in hertz (Hz).
            */
@@ -140,6 +171,7 @@ namespace Mycila {
 
         private:
           friend class PZEM;
+          mutable std::mutex _dataMutex;
       };
 
       typedef std::function<void(EventType eventType, const Data& data)> Callback;
@@ -250,7 +282,9 @@ namespace Mycila {
       static uint16_t _crc16(const uint8_t* data, uint16_t len);
 
     private:
-      static std::mutex _mutex;
+      static std::recursive_mutex _mutex;
+      static std::vector<std::pair<HardwareSerial*, std::unique_ptr<std::recursive_mutex>>> _serialMutexes;
+      static std::mutex _serialRegistry;
       static TaskHandle_t _taskHandle;
 #if MYCILA_PZEM_ASYNC_MAX_INSTANCES > 0
       static PZEM* _instances[MYCILA_PZEM_ASYNC_MAX_INSTANCES];
@@ -258,5 +292,8 @@ namespace Mycila {
       static void _remove(PZEM* pzem);
       static void _pzemTask(void* pvParameters);
 #endif
+      
+      // Serial-specific mutex getter
+      static std::recursive_mutex& getSerialMutex(HardwareSerial* serial);
   };
 } // namespace Mycila
